@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Analytics Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #3498db;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="min-h-screen">
+        <!-- Navigation -->
+        <nav class="bg-white shadow-sm">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between h-16">
+                    <div class="flex items-center">
+                        <h1 class="text-xl font-bold text-gray-900">Excel Analytics Platform</h1>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button id="loginBtn" class="text-gray-600 hover:text-gray-900">Login</button>
+                        <button id="signupBtn" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">Sign Up</button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- File Upload Section -->
+            <div class="bg-white rounded-lg shadow p-6 mb-6">
+                <h2 class="text-lg font-semibold mb-4">Upload Excel File</h2>
+                <div class="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6">
+                    <i class="bi bi-file-earmark-spreadsheet text-4xl text-gray-400 mb-2"></i>
+                    <p class="text-sm text-gray-500 mb-4">Drag and drop or click to upload .xls/.xlsx files</p>
+                    <input type="file" id="fileInput" class="hidden" accept=".xls,.xlsx">
+                    <button onclick="document.getElementById('fileInput').click()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                        Choose File
+                    </button>
+                </div>
+            </div>
+
+            <!-- Chart Configuration -->
+            <div id="chartConfig" class="bg-white rounded-lg shadow p-6 mb-6 hidden">
+                <h2 class="text-lg font-semibold mb-4">Chart Configuration</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">X-Axis</label>
+                        <select id="xAxis" class="w-full border border-gray-300 rounded-md p-2">
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Y-Axis</label>
+                        <select id="yAxis" class="w-full border border-gray-300 rounded-md p-2">
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Chart Type</label>
+                        <select id="chartType" class="w-full border border-gray-300 rounded-md p-2">
+                            <option value="bar">Bar Chart</option>
+                            <option value="line">Line Chart</option>
+                            <option value="scatter">Scatter Plot</option>
+                            <option value="pie">Pie Chart</option>
+                        </select>
+                    </div>
+                </div>
+                <button id="generateChart" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+                    Generate Chart
+                </button>
+            </div>
+
+            <!-- Chart Display -->
+            <div id="chartContainer" class="bg-white rounded-lg shadow p-6 mb-6 hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold">Chart Visualization</h2>
+                    <button id="downloadChart" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700">
+                        Download Chart
+                    </button>
+                </div>
+                <canvas id="chartCanvas"></canvas>
+            </div>
+
+            <!-- AI Insights -->
+            <div id="aiInsights" class="bg-white rounded-lg shadow p-6 mb-6 hidden">
+                <h2 class="text-lg font-semibold mb-4">AI Insights</h2>
+                <div id="insightsContent" class="prose">
+                    <div class="loader mx-auto"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let workbook = null;
+        let currentChart = null;
+
+        // File Upload Handler
+        document.getElementById('fileInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const data = new Uint8Array(e.target.result);
+                    workbook = XLSX.read(data, {type: 'array'});
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
+                    
+                    // Populate dropdowns with column headers
+                    const headers = jsonData[0];
+                    const xAxis = document.getElementById('xAxis');
+                    const yAxis = document.getElementById('yAxis');
+                    xAxis.innerHTML = '';
+                    yAxis.innerHTML = '';
+                    
+                    headers.forEach((header, index) => {
+                        xAxis.add(new Option(header, index));
+                        yAxis.add(new Option(header, index));
+                    });
+
+                    // Show chart configuration
+                    document.getElementById('chartConfig').classList.remove('hidden');
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        });
+
+        // Generate Chart
+        document.getElementById('generateChart').addEventListener('click', () => {
+            if (!workbook) return;
+
+            const xAxisIndex = parseInt(document.getElementById('xAxis').value);
+            const yAxisIndex = parseInt(document.getElementById('yAxis').value);
+            const chartType = document.getElementById('chartType').value;
+
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const jsonData = XLSX.utils.sheet_to_json(firstSheet, {header: 1});
+            const headers = jsonData[0];
+            const data = jsonData.slice(1);
+
+            const xValues = data.map(row => row[xAxisIndex]);
+            const yValues = data.map(row => row[yAxisIndex]);
+
+            const ctx = document.getElementById('chartCanvas').getContext('2d');
+            if (currentChart) {
+                currentChart.destroy();
+            }
+
+            currentChart = new Chart(ctx, {
+                type: chartType,
+                data: {
+                    labels: xValues,
+                    datasets: [{
+                        label: headers[yAxisIndex],
+                        data: yValues,
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            document.getElementById('chartContainer').classList.remove('hidden');
+            document.getElementById('aiInsights').classList.remove('hidden');
+
+            // Generate AI Insights
+            generateAIInsights(jsonData, headers[xAxisIndex], headers[yAxisIndex]);
+        });
+
+        // Generate AI Insights
+        async function generateAIInsights(data, xLabel, yLabel) {
+            const insightsContent = document.getElementById('insightsContent');
+            insightsContent.innerHTML = '<div class="loader mx-auto"></div>';
+
+            try {
+                const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/ai', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer 4YiSqujbqwgK3vv8ohoEx5AmGOG2',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        messages: [{
+                            role: 'user',
+                            content: [{
+                                type: 'text',
+                                text: `Analyze this data relationship between ${xLabel} and ${yLabel}: ${JSON.stringify(data)}`
+                            }]
+                        }]
+                    })
+                });
+
+                const result = await response.json();
+                insightsContent.innerHTML = `<div class="text-gray-700">${result.message}</div>`;
+            } catch (error) {
+                insightsContent.innerHTML = '<div class="text-red-500">Failed to generate insights. Please try again.</div>';
+            }
+        }
+
+        // Download Chart
+        document.getElementById('downloadChart').addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'chart.png';
+            link.href = document.getElementById('chartCanvas').toDataURL('image/png');
+            link.click();
+        });
+
+        // Drag and Drop Support
+        const dropZone = document.querySelector('.border-dashed');
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        dropZone.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            document.getElementById('fileInput').files = files;
+            document.getElementById('fileInput').dispatchEvent(new Event('change'));
+        });
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
